@@ -61,6 +61,18 @@ void block_list_add(block_t *head, block_t *block) {
 }
 
 /*
+ * adds a block to the end of the linked list
+ */
+void used_list_add(block_t *head, block_t *block) {
+  if (head == NULL || block == NULL) {
+    assert(false && "HEAP: Head or block is NULL pointer ;)");
+  }
+  block_t* temp = head->next;
+  head->next = block;
+  block->next = temp;
+}
+
+/*
  * creates a new block and adds it to the end of the list
  * also returns a reference to the new block
  */

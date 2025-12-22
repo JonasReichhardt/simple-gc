@@ -9,8 +9,9 @@
 #include "heap_util.h"
 #include "objects.h"
 #include "type_desc.h"
+#include <stdint.h>
 
-#define HEAP_SIZEB 32768 // 32KiB
+#define HEAP_SIZEB 1073741824 // 32768 // 32KiB
 
 static void *hstart;    // heap start
 static void *hend;      // heap end
@@ -27,6 +28,9 @@ void *gc_alloc(char *name) {
   // allocate "Object" on our heap with size for the hidden type tag
   Order *order = (Order *)heap_alloc(sizeof(Order) + sizeof(size_t));
 
+  if(order==NULL){
+      return NULL;
+  }
   // move order pointer
   order = (Order *)((size_t *)order + 1);
 
@@ -34,16 +38,16 @@ void *gc_alloc(char *name) {
   order_t **tp = (order_t **)(((size_t *)order) - 1);
   *tp = &order_desc;
 
-  return (void*)order;
+  return (void *)order;
 }
 
 // This method should prevent user access to memory outside of our allocated
 // heap
-static void in_heap(void *block) {
-  if (block < hstart && block > hend) {
+static void in_heap(block_t *block) {
+  void *end = (void *)(((uint8_t *)block->mem) + block->size);
+  if (block->mem < hstart || block->mem > hend || end <hstart || end>hend) {
     heap_dump();
-    printf("HEAP: alloc return address [%p] outside [%p...%p]\n", block, hstart,
-           (void *)(((uint8_t *)hstart) + HEAP_SIZEB));
+    printf("HEAP: alloc block [%p] outside [%p...%p]\n", (void*)block, hstart, hend);
     printf("HEAP: generated heap trace for error search\n");
     assert(false);
   }
@@ -103,7 +107,7 @@ void *heap_alloc(size_t alloc_size) {
       if (block->size == alloc_size) {
         // take the whole block from the free list to the used list
         prev_block->next = block->next;
-        block_list_add(ublock, block);
+        used_list_add(ublock, block);
       } else {
         // new free block with shifted mem address and size by alloc_size
         block_list_add_new(fblock,
@@ -111,15 +115,15 @@ void *heap_alloc(size_t alloc_size) {
                            block->size - alloc_size);
         prev_block->next = block->next;
         block->size = alloc_size;
-        block_list_add(ublock, block);
+        used_list_add(ublock, block);
       }
 
-      in_heap((void *)(block->mem));
+      in_heap(block);
       return (void *)(block->mem);
     }
 
-    if (block->mem == NULL) { // reached the front again => no more space
-      assert(false && "HEAP: No more free space");
+    if (block == fblock) { // reached the front again => no more space
+      return NULL;
     }
   }
   assert(false &&
