@@ -25,10 +25,11 @@ void test_types() {
 
 int main() {
   heap_init();
-  for (uint32_t i = 0; i < 5; i++) {
-    uint32_t *v = (uint32_t *)heap_alloc(sizeof(uint32_t));
+  for (uint32_t i = 0; i < 1000000; i++) {
+    uint64_t *v = (uint64_t *)heap_alloc(sizeof(uint64_t));
     *v = 0xfeedbeef;
   }
   heap_dump();
+  heap_deinit();
   return 0;
 }

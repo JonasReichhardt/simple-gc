@@ -1,132 +1,161 @@
 #pragma once
 
+#include "assert.h"
+#include "stdbool.h"
 #include "stdint.h"
 #include "stdio.h"
 #include "stdlib.h"
-#include "assert.h"
+#include <stdint.h>
+#include <stdlib.h>
+
+#include "heap_util.h"
 
 #define HEAP_SIZEB 32768 // 32KiB
 // who many free list blocks should be printed per line during dumping
 #define BLOCKS_PER_LINE 3
 #define DEBUG
 
-typedef struct block {
-  size_t size; // size in minimal block-sized memory chunks (e.g. 1=16bytes,
-               // 2=32bytes)
-  struct block *next;
-} block_t;
-
-static block_t *start;  // pointer to heap start
+static void *start;     // zero sized block at the beginning
 static block_t *fblock; // pointer to the first free block
 static block_t *ublock; // pointer to the first used block
+static bool is_init = false;
 
-void heap_init() {
-  start = (block_t *)malloc(HEAP_SIZEB);
-  fblock = start;
-  if (fblock == NULL) {
-    printf("HEAP: allocation failed. Aborting...\n");
+void heap_dump();
+
+// This method should prevent memory overwrite outside of our allocated memory
+static void in_heap(void *block) {
+  if (block < (void *)start && block > (void *)(start + HEAP_SIZEB)) {
+    heap_dump();
+    printf("HEAP: alloc return address [%lx] outside [%lx...%lx]\n", block,
+           start, start + HEAP_SIZEB);
+    printf("HEAP: generated heap trace for error search\n");
     assert(false);
   }
-  fblock->size = HEAP_SIZEB / sizeof(block_t);
-  fblock->next = fblock; // cyclic link
-  printf("HEAP: size [%lu] bytes with base at %lx and block length %lu\n",HEAP_SIZEB, fblock, fblock->size);
+}
+
+void heap_init() {
+  if (is_init) {
+    printf("HEAP: already initialized\n");
+    return;
+  }
+  start = malloc(HEAP_SIZEB);
+  if (start == NULL) {
+    printf("HEAP: Could not allocate heap area with size %ux. Aborting...\n",
+           HEAP_SIZEB);
+    assert(false);
+  }
+
+  // zero-sized dummy block
+  fblock = (block_t *)malloc(sizeof(block_t));
+  fblock->size = 0;
+  fblock->next = (block_t *)malloc(sizeof(block_t));
+  fblock->mem = NULL;
+
+  // free block
+  fblock->next->size = HEAP_SIZEB;
+  fblock->next->next = fblock; // cyclic list
+  fblock->next->mem = start;   // points to the actual memory
+
+  // zero_sized dummy block
+  ublock = (block_t *)malloc(sizeof(block_t));
+  ublock->size = 0;
+  ublock->next = ublock;
+  ublock->mem = NULL;
+
+  is_init = true;
+  printf("HEAP: size [%lu] bytes with base at %lx allocated\n", HEAP_SIZEB,
+         fblock->mem);
+}
+
+void heap_deinit() {
+  // free heap area
+  free(start);
+  // free linked lists
+  block_list_free(ublock);
+  block_list_free(fblock);
+  is_init = false;
+  printf("HEAP: size [%lu] bytes with base at %lx de-allocated\n", HEAP_SIZEB,
+         fblock->mem);
 }
 
 void *heap_alloc(size_t alloc_size) {
-  size_t num_blocks;
-  block_t *p, *prev_p;
-
-  num_blocks = (alloc_size + sizeof(block_t) - 1) / sizeof(block_t) + 1;
 #ifdef DEBUG
-  printf("HEAP: allocation request for %lu bytes => [block size = %lu] "
-         "[allocated bytes = %lu]\n",
-         alloc_size, num_blocks, num_blocks * sizeof(block_t));
+  printf("HEAP: allocation request for %lu bytes\n", alloc_size);
 #endif
-  // start search at first free block
-  prev_p = fblock;
-
-  for (p = prev_p->next;; prev_p = p, p = p->next) {
+  block_t *prev_block = fblock;
+  // loop through all free blocks until we reach the front again
+  for (block_t *block = fblock->next;;
+       prev_block = block, block = block->next) {
     // find the first fitting block
-    if (p->size >= num_blocks) {
-      if (p->size == num_blocks) {
-        prev_p->next = p->next;
-        assert(false);
+    if (block->size >= alloc_size) {
+      if (block->size == alloc_size) {
+        // take the whole block from the free list to the used list
+        prev_block->next = block->next;
+        block_list_add(ublock, block);
+#ifdef DEBUG
+        printf("HEAP: found a perfectly fitting block @ [0x%lx]\n", block->mem);
+#endif
       } else {
-        p->size -= num_blocks; // calculate new block size
-        p += p->size;          // move pointer
-        p->size = num_blocks;  // save size in new block
+#ifdef DEBUG
+        printf("HEAP: found a big enough block @ [0x%lx]\n", block->mem);
+#endif
+        // new free block with shifted mem address and size by alloc_size
+        block_t *new_freeb = block_list_add_new(
+            fblock, (void *)(((uint8_t *)block->mem) + alloc_size),
+            block->size - alloc_size);
+        prev_block->next = block->next;
+        block->size = alloc_size;
+        block_list_add(ublock, block);
+#ifdef DEBUG
+        printf("HEAP: new free block [%lu]@[0x%lx]\n", new_freeb->size,
+               new_freeb->mem);
+#endif
       }
 
-      fblock = prev_p;
-
-      // add p to used list
-      if (ublock == NULL) {
-        ublock = p->next = p;
-        ublock->next = ublock;
-      } else {
-        p->next = ublock->next;
-        ublock->next = p;
-      }
-      printf("HEAP: used block with size [%lu] at [%lx]\n", ublock->next->size,
-             ublock->next);
-      printf("HEAP: next free block with size [%lu] at [%lx]\n", fblock->size,
-             fblock);
-
-      return (void *)(p + 1);
-    } else {
-      printf("HEAP: Block to small\n");
+      in_heap((void *)(block->mem));
+      return (void *)(block->mem);
     }
-    if (p == fblock) { // reached the front again => no more space
-      printf("HEAP: No more free space\n");
-      assert(false);
+
+    if (block->mem == NULL) { // reached the front again => no more space
+      assert(false && "HEAP: No more free space");
     }
   }
-  printf("HEAP: Something is wrong with the free list. There is no cyclic "
-         "reference\n");
-  assert(false);
+  assert(false &&
+         "HEAP: Something is wrong with the free list. There is no cyclic "
+         "reference");
 }
 
-void print_raw_heap(){
-    printf("%.*s\n", HEAP_SIZEB, (unsigned char*)start);
-}
+void print_raw_heap() { printf("%.*s\n", HEAP_SIZEB, (unsigned char *)start); }
 
 size_t print_free_blocks() {
   printf("Free list:\n");
-  printf("[%lu]@[0x%lx]", fblock->size * sizeof(block_t),fblock);
-  size_t free_bytes = fblock->size * sizeof(block_t);
-  block_t *block;
+  size_t free_bytes = 0;
   size_t i = 0;
-  for (block = fblock->next; block != fblock; block = block->next) {
-    printf("<--[%lu]@[0x%lx]", block->size * sizeof(block_t),block);
-    free_bytes += block->size * sizeof(block_t);
+  for (block_t *block = fblock->next; block != fblock; block = block->next) {
+    printf("[%lu]@[0x%lx]<--", block->size, block);
+    free_bytes += block->size;
     i++;
     if (i == BLOCKS_PER_LINE) {
       printf("\n");
       i = 0;
     }
   }
-  printf("\n\nFree heap space: %lu bytes\n",free_bytes);
+  printf("\n\nFree heap space: %lu bytes\n", free_bytes);
   return free_bytes;
 }
 
 size_t print_used_blocks() {
-    printf("Allocated \"Objects\":\n");
-    printf("[%lu]@[0x%lx] Name: TODO Data: [0x%lx]\n", ublock->size * sizeof(block_t),ublock,*(ublock+1));
-    printf("   -->[0x%lxTODO]\n", 0); //TODO
-    size_t used_bytes = ublock->size * sizeof(block_t);
-    block_t *block;
-    size_t i = 0;
-    for (block = ublock->next; block != ublock; block = block->next) {
-      printf("[%lu]@[0x%lx] Name: TODO Data: [0x%lx]\n", block->size * sizeof(block_t),block,*(block+1));
-      used_bytes += ublock->size * sizeof(block_t);
-      i++;
-      if (i == BLOCKS_PER_LINE) {
-        printf("\n");
-        i = 0;
-      }
-    }
-    printf("\n\nLive objects: %lu bytes\n",used_bytes);
-    return used_bytes;
+  printf("Allocated \"Objects\"\n");
+  size_t used_bytes = 0;
+  size_t i = 0;
+  for (block_t *block = ublock->next; block != ublock; block = block->next) {
+    printf("[%lub]@[0x%lx] Name: [TODO] Data: [0x%lx]\n", block->size, block,
+           *((uint64_t *)block->mem));
+    used_bytes += block->size;
+    i++;
+  }
+  printf("\n\nLive objects: %lu bytes\n", used_bytes);
+  return used_bytes;
 }
 
 void heap_dump() {
@@ -137,5 +166,7 @@ void heap_dump() {
   printf("------------------------------------------\n");
   size_t used_bytes = print_used_blocks();
   printf("------------------------------------------\n");
-  printf("[Live Objects] %lu bytes [Free Blocks] %lu bytes [Combined] %lu bytes [Heap size] %lu\n",used_bytes,free_bytes,used_bytes+free_bytes,HEAP_SIZEB);
+  printf("[Live Objects] %lu bytes [Free Blocks] %lu bytes [Combined] %lu "
+         "bytes [Heap size] %lu\n",
+         used_bytes, free_bytes, used_bytes + free_bytes, HEAP_SIZEB);
 }
