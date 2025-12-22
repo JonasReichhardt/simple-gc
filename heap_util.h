@@ -9,7 +9,7 @@
  * This file contains some function utility for the heap
  */
 
- // who many free list blocks should be printed per line during dumping
+ // how many free list blocks should be printed per line during dumping
  #define BLOCKS_PER_LINE 3
 
 typedef struct block {

@@ -7,8 +7,8 @@
 #include "stdlib.h"
 
 #include "heap_util.h"
-//#include "objects.h"
-//#include "type_desc.h"
+#include "objects.h"
+#include "type_desc.h"
 
 #define HEAP_SIZEB 32768 // 32KiB
 
@@ -18,23 +18,24 @@ static block_t *fblock; // dummy block: points to the first free block
 static block_t *ublock; // dummy block: points to the first free block
 static bool is_init = false;
 
-void heap_dump();
+static order_t order_desc = {.size = sizeof(Order), .n = -4};
 
-/*void test_types() {
-  order_t ord_type = {.size = sizeof(Order), .n = 1};
-  Order *order = malloc(sizeof(Order) + sizeof(size_t));
+void heap_dump();
+void *heap_alloc(size_t alloc_size);
+
+void *gc_alloc(char *name) {
+  // allocate "Object" on our heap with size for the hidden type tag
+  Order *order = (Order *)heap_alloc(sizeof(Order) + sizeof(size_t));
 
   // move order pointer
   order = (Order *)((size_t *)order + 1);
 
   // install new pointer to freed space
   order_t **tp = (order_t **)(((size_t *)order) - 1);
-  *tp = &ord_type;
+  *tp = &order_desc;
 
-  // access type descriptor
-  order_t *k = (order_t *)*(((size_t *)order) - 1);
-  printf("%lu %lu\n", (k)->size, (k)->n);
-  }*/
+  return (void*)order;
+}
 
 // This method should prevent user access to memory outside of our allocated
 // heap
@@ -105,9 +106,9 @@ void *heap_alloc(size_t alloc_size) {
         block_list_add(ublock, block);
       } else {
         // new free block with shifted mem address and size by alloc_size
-        block_list_add_new(
-            fblock, (void *)(((uint8_t *)block->mem) + alloc_size),
-            block->size - alloc_size);
+        block_list_add_new(fblock,
+                           (void *)(((uint8_t *)block->mem) + alloc_size),
+                           block->size - alloc_size);
         prev_block->next = block->next;
         block->size = alloc_size;
         block_list_add(ublock, block);
