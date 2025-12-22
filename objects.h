@@ -1,5 +1,6 @@
 #pragma once
 
+#include "stdbool.h"
 #include "stdint.h"
 
 // C naming conventions are ignored here for clarity
@@ -16,22 +17,22 @@ typedef struct Order {
 } Order;
 
 typedef struct OrderNode {
-  OrderNode *next;
-  Order order;
+  struct OrderNode *next;
+  struct Order *order;
 } OrderNode;
 
 typedef struct Product {
   uint64_t id;
   // NOTE: not the best way but the easiest
   char name[25];
-  OrderNode order;
+  struct OrderNode *order;
 } Product;
 
 typedef struct ProdNode {
-  ProdNode *next;
-  Product product;
+  struct ProdNode *next;
+  struct Product *product;
 } ProdNode;
 
 typedef struct ProductList {
-  ProdNode *first;
+  struct ProdNode *first;
 } ProductList;

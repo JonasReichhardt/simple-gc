@@ -2,14 +2,14 @@ CC = gcc
 CFLAGS = -g
 CFLAGSR = -Wall -Wextra -Wpedantic -Werror
 TARGET = main
-DEPS = heap
+DEPS = heap.h objects.h type_desc.h
 
 
-$(TARGET): $(TARGET).c $(DEPS).h
-	$(CC) $(CFLAGS) -o build/$(TARGET) $(DEPS).h $(TARGET).c
+$(TARGET): $(TARGET).c $(DEPS)
+	$(CC) $(CFLAGS) -o build/$(TARGET) $(DEPS) $(TARGET).c
 
 release:
-	$(CC) $(CFLAGS) -o $(TARGET) $(DEPS).h $(TARGET).c
+	$(CC) $(CFLAGS) -o $(TARGET) $(DEPS) $(TARGET).c
 
 run: $(TARGET)
 	@build/$(TARGET)
