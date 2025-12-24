@@ -5,49 +5,77 @@
 #include "stdint.h"
 #include "stdio.h"
 #include "stdlib.h"
+#include "string.h"
 
 #include "heap_util.h"
 #include "objects.h"
 #include "type_desc.h"
-#include <stdint.h>
 
-#define HEAP_SIZEB 1073741824 // 32768 // 32KiB
+#define HEAP_SIZEB 32768 // 32KiB
 
+// Heap related variables
 static void *hstart;    // heap start
 static void *hend;      // heap end
 static block_t *fblock; // dummy block: points to the first free block
 static block_t *ublock; // dummy block: points to the first free block
 static bool is_init = false;
 
-static order_t order_desc = {.size = sizeof(Order), .n = -4};
+// Object related variables
+// linked list with all registered objects and their type descriptors
+static object_t *objects = NULL;
 
+// Function definitions
 void heap_dump();
-void *heap_alloc(size_t alloc_size);
+void *heap_alloc(uint32_t alloc_size);
+
+void register_type(char *name, int32_t *desc_addr) {
+  object_t *new_obj = (object_t *)malloc(sizeof(object_t));
+  if (new_obj == NULL) {
+    assert(false && "HEAP: Could not register type");
+  }
+  strcpy(new_obj->name, name);
+  new_obj->type_desc = desc_addr;
+  new_obj->next = objects;
+  objects = new_obj;
+}
 
 void *gc_alloc(char *name) {
-  // allocate "Object" on our heap with size for the hidden type tag
-  Order *order = (Order *)heap_alloc(sizeof(Order) + sizeof(size_t));
+  // find type by name
+  object_t *obj_type = get_obj_by_name(objects, name);
+  if (obj_type == NULL) {
+    printf("HEAP: Object \"%s\" not registered on heap\n", name);
+    return NULL;
+  }
 
-  if(order==NULL){
-      return NULL;
+  // allocate "Object" on our heap with size for the hidden type tag
+  uint32_t alloc_size = obj_type->type_desc[0] + sizeof(size_t);
+  printf(
+      "HEAP: Allocation request for [%s] with size [%u]+[%lu] for type tag\n",
+      obj_type->name, obj_type->type_desc[0], sizeof(size_t));
+  void *object = heap_alloc(alloc_size);
+
+  if (object == NULL) {
+    printf("HEAP: Could not allocate %s\n", obj_type->name);
+    return NULL;
   }
   // move order pointer
-  order = (Order *)((size_t *)order + 1);
+  object = ((size_t *)object + 1);
 
   // install new pointer to freed space
-  order_t **tp = (order_t **)(((size_t *)order) - 1);
-  *tp = &order_desc;
+  int32_t **tp = (int32_t **)(((size_t *)object) - 1);
+  *tp = obj_type->type_desc;
 
-  return (void *)order;
+  return object;
 }
 
 // This method should prevent user access to memory outside of our allocated
 // heap
 static void in_heap(block_t *block) {
   void *end = (void *)(((uint8_t *)block->mem) + block->size);
-  if (block->mem < hstart || block->mem > hend || end <hstart || end>hend) {
+  if (block->mem < hstart || block->mem > hend || end < hstart || end > hend) {
     heap_dump();
-    printf("HEAP: alloc block [%p] outside [%p...%p]\n", (void*)block, hstart, hend);
+    printf("HEAP: alloc block [%p] outside [%p...%p]\n", (void *)block, hstart,
+           hend);
     printf("HEAP: generated heap trace for error search\n");
     assert(false);
   }
@@ -90,6 +118,7 @@ void heap_init() {
 
 void heap_deinit() {
   // free linked lists
+  object_list_free(objects);
   block_list_free(ublock);
   block_list_free(fblock);
   // free heap area
@@ -97,7 +126,7 @@ void heap_deinit() {
   is_init = false;
 }
 
-void *heap_alloc(size_t alloc_size) {
+void *heap_alloc(uint32_t alloc_size) {
   block_t *prev_block = fblock;
   // loop through all free blocks until we reach the front again
   for (block_t *block = fblock->next;;
@@ -137,7 +166,7 @@ void heap_dump() {
   printf("------------------------------------------\n");
   size_t free_bytes = print_free_blocks(fblock);
   printf("------------------------------------------\n");
-  size_t used_bytes = print_used_blocks(ublock);
+  size_t used_bytes = print_used_blocks(ublock, objects);
   printf("------------------------------------------\n");
   printf("[Live Objects] %lu bytes [Free Blocks] %lu bytes [Combined] %lu "
          "bytes [Heap size] %d\n",
