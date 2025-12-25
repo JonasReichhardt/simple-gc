@@ -3,8 +3,6 @@
 #include "stdint.h"
 #include "stdlib.h"
 
-#include "objects.h"
-
 // this macro resolves the address to the type tag of an object
 #define GET_TYPE(t) (int32_t *)(*(((size_t *)t) - 1))
 
