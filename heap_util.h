@@ -35,6 +35,7 @@ void object_list_free(object_t *head) {
   object_t *temp;
   while (head != NULL) {
     temp = head->next;
+    free(head->type_desc);
     free(head);
     head = temp;
   }

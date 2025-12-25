@@ -12,6 +12,7 @@
 #include "type_desc.h"
 
 #define HEAP_SIZEB 32768 // 32KiB
+#define DEBUG false
 
 // Heap related variables
 static void *hstart;    // heap start
@@ -21,6 +22,7 @@ static block_t *ublock; // dummy block: points to the first free block
 static bool is_init = false;
 
 // Object related variables
+
 // linked list with all registered objects and their type descriptors
 static object_t *objects = NULL;
 
@@ -49,9 +51,11 @@ void *gc_alloc(char *name) {
 
   // allocate "Object" on our heap with size for the hidden type tag
   uint32_t alloc_size = obj_type->type_desc[0] + sizeof(size_t);
+  #if DEBUG
   printf(
-      "HEAP: Allocation request for [%s] with size [%u]+[%lu] for type tag\n",
+      "HEAP: Allocation request for [%s] with size [%u]+[%lu]\n",
       obj_type->name, obj_type->type_desc[0], sizeof(size_t));
+  #endif
   void *object = heap_alloc(alloc_size);
 
   if (object == NULL) {
