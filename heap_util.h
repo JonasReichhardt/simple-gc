@@ -28,7 +28,32 @@ typedef struct object {
   struct object *next;
 } object_t;
 
-void object_list_free(object_t *head) {
+object_t *get_obj_by_name(object_t *head, char *name) {
+  for (object_t *obj = head;; obj = obj->next) {
+    if (strcmp(obj->name, name) == 0) {
+      return obj;
+    }
+    if (obj->next == NULL) {
+      continue;
+    }
+  }
+  return NULL;
+}
+
+object_t *get_obj_by_type(object_t *head, int32_t *type) {
+  for (object_t *obj = head;; obj = obj->next) {
+    // equal if they point to the same area
+    if (obj->type_desc - type == 0) {
+      return obj;
+    }
+    if (obj->next == NULL) {
+      continue;
+    }
+  }
+  return NULL;
+}
+
+void free_object_list(object_t *head) {
   if (head == NULL) {
     return;
   }
@@ -44,7 +69,7 @@ void object_list_free(object_t *head) {
 /*
  * frees all blocks of the linked list
  */
-void block_list_free(block_t *head) {
+void free_block_list(block_t *head) {
   if (head == NULL) {
     return;
   }
@@ -70,7 +95,7 @@ void block_list_free(block_t *head) {
 /*
  * adds a block to the end of the linked list
  */
-void block_list_add(block_t *head, block_t *block) {
+void block_list_add_back(block_t *head, block_t *block) {
   if (head == NULL || block == NULL) {
     assert(false && "HEAP: Head or block is NULL pointer ;)");
   }
@@ -86,9 +111,9 @@ void block_list_add(block_t *head, block_t *block) {
 /*
  * adds a block to the end of the linked list
  */
-void used_list_add(block_t *head, block_t *block) {
+void block_list_add_front(block_t *head, block_t *block) {
   if (head == NULL || block == NULL) {
-    assert(false && "HEAP: Head or block is NULL pointer ;)");
+    assert(false && "HEAP: Head or block is NULL pointer)");
   }
   block_t *temp = head->next;
   head->next = block;
@@ -109,7 +134,7 @@ block_t *block_list_add_new(block_t *head, void *mem, size_t size) {
   }
   block->size = size;
   block->mem = mem;
-  block_list_add(head, block);
+  block_list_add_back(head, block);
   return block;
 }
 
@@ -148,31 +173,6 @@ size_t print_free_blocks(block_t *fblock) {
   }
   printf("\n\nFree heap space: %lu bytes\n", free_bytes);
   return free_bytes;
-}
-
-object_t *get_obj_by_name(object_t *head, char *name) {
-  for (object_t *obj = head;; obj = obj->next) {
-    if (strcmp(obj->name, name) == 0) {
-      return obj;
-    }
-    if (obj->next == NULL) {
-      continue;
-    }
-  }
-  return NULL;
-}
-
-object_t *get_obj_by_type(object_t *head, int32_t *type) {
-  for (object_t *obj = head;; obj = obj->next) {
-    // equal if they point to the same area
-    if (obj->type_desc - type == 0) {
-      return obj;
-    }
-    if (obj->next == NULL) {
-      continue;
-    }
-  }
-  return NULL;
 }
 
 size_t print_used_blocks(block_t *ublock, object_t *objs) {

@@ -51,11 +51,10 @@ void *gc_alloc(char *name) {
 
   // allocate "Object" on our heap with size for the hidden type tag
   uint32_t alloc_size = obj_type->type_desc[0] + sizeof(size_t);
-  #if DEBUG
-  printf(
-      "HEAP: Allocation request for [%s] with size [%u]+[%lu]\n",
-      obj_type->name, obj_type->type_desc[0], sizeof(size_t));
-  #endif
+#if DEBUG
+  printf("HEAP: Allocation request for [%s] with size [%u]+[%lu]\n",
+         obj_type->name, obj_type->type_desc[0], sizeof(size_t));
+#endif
   void *object = heap_alloc(alloc_size);
 
   if (object == NULL) {
@@ -122,9 +121,9 @@ void heap_init() {
 
 void heap_deinit() {
   // free linked lists
-  object_list_free(objects);
-  block_list_free(ublock);
-  block_list_free(fblock);
+  free_object_list(objects);
+  free_block_list(ublock);
+  free_block_list(fblock);
   // free heap area
   free(hstart);
   is_init = false;
@@ -140,7 +139,6 @@ void *heap_alloc(uint32_t alloc_size) {
       if (block->size == alloc_size) {
         // take the whole block from the free list to the used list
         prev_block->next = block->next;
-        used_list_add(ublock, block);
       } else {
         // new free block with shifted mem address and size by alloc_size
         block_list_add_new(fblock,
@@ -148,8 +146,8 @@ void *heap_alloc(uint32_t alloc_size) {
                            block->size - alloc_size);
         prev_block->next = block->next;
         block->size = alloc_size;
-        used_list_add(ublock, block);
       }
+      block_list_add_front(ublock, block);
 
       in_heap(block);
       return (void *)(block->mem);
