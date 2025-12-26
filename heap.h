@@ -28,8 +28,11 @@ static object_t *objects = NULL;
 
 // Function definitions
 void heap_dump();
-void *heap_alloc(uint32_t alloc_size);
+static void *heap_alloc(uint32_t alloc_size);
 
+/*
+ * PUBLIC METHODS
+ */
 void register_type(char *name, int32_t *desc_addr) {
   object_t *new_obj = (object_t *)malloc(sizeof(object_t));
   if (new_obj == NULL) {
@@ -71,8 +74,11 @@ void *gc_alloc(char *name) {
   return object;
 }
 
-// This method should prevent user access to memory outside of our allocated
-// heap
+/*
+ * PRIVATE METHODS
+ */
+
+// Check if block memory is inside allocated heap space
 static void in_heap(block_t *block) {
   void *end = (void *)(((uint8_t *)block->mem) + block->size);
   if (block->mem < hstart || block->mem > hend || end < hstart || end > hend) {
@@ -84,6 +90,47 @@ static void in_heap(block_t *block) {
   }
 }
 
+static void *heap_alloc(uint32_t alloc_size) {
+  block_t *prev_block = fblock;
+  // loop through all free blocks until we reach the front again
+  for (block_t *block = fblock->next;;
+       prev_block = block, block = block->next) {
+    // find the first fitting block
+    if (block->size >= alloc_size) {
+      if (block->size == alloc_size) {
+        // take the whole block from the free list to the used list
+        prev_block->next = block->next;
+      } else {
+        // new free block with shifted mem address and size by alloc_size
+        block_list_add_new(fblock,
+                           (void *)(((uint8_t *)block->mem) + alloc_size),
+                           block->size - alloc_size);
+        prev_block->next = block->next;
+        block->size = alloc_size;
+      }
+      block_list_add_front(ublock, block);
+
+      in_heap(block);
+      return (void *)(block->mem);
+    }
+
+    if (block == fblock) { // reached the front again => no more space
+      return NULL;
+    }
+  }
+  assert(false &&
+         "HEAP: Something is wrong with the free list. There is no cyclic "
+         "reference");
+}
+
+/*
+ * PUBLIC METHODS
+ */
+
+// Run Mark&Sweep algorithm, free unused blocks and compact heap
+void gc(void *roots) {}
+
+// Allocate and initialize heap area
 void heap_init() {
   if (is_init) {
     printf("HEAP: already initialized\n");
@@ -119,6 +166,7 @@ void heap_init() {
          fblock->next->mem);
 }
 
+// Deallocate heap area and related memory
 void heap_deinit() {
   // free linked lists
   free_object_list(objects);
@@ -127,39 +175,6 @@ void heap_deinit() {
   // free heap area
   free(hstart);
   is_init = false;
-}
-
-void *heap_alloc(uint32_t alloc_size) {
-  block_t *prev_block = fblock;
-  // loop through all free blocks until we reach the front again
-  for (block_t *block = fblock->next;;
-       prev_block = block, block = block->next) {
-    // find the first fitting block
-    if (block->size >= alloc_size) {
-      if (block->size == alloc_size) {
-        // take the whole block from the free list to the used list
-        prev_block->next = block->next;
-      } else {
-        // new free block with shifted mem address and size by alloc_size
-        block_list_add_new(fblock,
-                           (void *)(((uint8_t *)block->mem) + alloc_size),
-                           block->size - alloc_size);
-        prev_block->next = block->next;
-        block->size = alloc_size;
-      }
-      block_list_add_front(ublock, block);
-
-      in_heap(block);
-      return (void *)(block->mem);
-    }
-
-    if (block == fblock) { // reached the front again => no more space
-      return NULL;
-    }
-  }
-  assert(false &&
-         "HEAP: Something is wrong with the free list. There is no cyclic "
-         "reference");
 }
 
 void heap_dump() {

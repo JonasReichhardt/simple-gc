@@ -23,9 +23,16 @@ void register_types() {
 }
 
 int main() {
+  /*
+   * PROLOGUE
+   */
   heap_init();
   register_types();
 
+
+  /*
+   * TEST
+   */
   Order *orders[NUM_ORDERS];
   for (uint i = 0; i < NUM_ORDERS; i++) {
     orders[i] = (Order *)gc_alloc("Order");
@@ -105,6 +112,9 @@ int main() {
   }
   product_list->first = pnode0;
 
+  /*
+   * EPILOGUE
+   */
   heap_dump();
   heap_deinit();
   return 0;
