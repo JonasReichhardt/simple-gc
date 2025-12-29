@@ -4,6 +4,7 @@
 
 #include "heap.h"
 #include "objects.h"
+#include "type_desc.h"
 
 #define NUM_ORDERS 3
 #define NUM_ORDER_NODES 7
@@ -111,11 +112,14 @@ int main() {
     assert(false && "Could not allocate ProductList");
   }
   product_list->first = pnode0;
-
+  printf("%p ",(void*)pnode0);
   /*
    * EPILOGUE
    */
-  heap_dump();
+  //heap_dump();
+  gc((void*)product_list);
+  //heap_dump();
+
   heap_deinit();
   return 0;
 }

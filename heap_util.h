@@ -93,6 +93,27 @@ void free_block_list(block_t *head) {
 }
 
 /*
+ * removes block if present in the list
+ */
+ void block_list_remove(block_t *head,block_t *block){
+     if (head == NULL || block == NULL) {
+       assert(false && "HEAP: Head or block is NULL pointer ;)");
+     }
+     // empty list
+     if(head->next==head){
+         return;
+     }
+     block_t *prev =head;
+     for(block_t *cur=head->next;block==head;block=block->next){
+         if(cur==block){
+             prev->next=block->next;
+             block->next =NULL;
+             return;
+         }
+     }
+ }
+
+/*
  * adds a block to the end of the linked list
  */
 void block_list_add_back(block_t *head, block_t *block) {
@@ -109,7 +130,7 @@ void block_list_add_back(block_t *head, block_t *block) {
 }
 
 /*
- * adds a block to the end of the linked list
+ * adds a block to the front of the linked list
  */
 void block_list_add_front(block_t *head, block_t *block) {
   if (head == NULL || block == NULL) {

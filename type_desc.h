@@ -3,8 +3,15 @@
 #include "stdint.h"
 #include "stdlib.h"
 
-// this macro resolves the address to the type tag of an object
+// Resolves the address to the type tag of an object
 #define GET_TYPE(t) (int32_t *)(*(((size_t *)t) - 1))
+// Resolves the address to the address of type tag of an object
+#define GET_TYPE_ADR(t) (int32_t **)((((size_t *)t) - 1))
+// Takes object address and unsets the mark bit of the type tag
+#define UNTAG(p) *GET_TYPE_ADR(p)=(int32_t *)(((uint64_t) (GET_TYPE(p))) & 0xfffffffc)
+// Takes object address and sets the mark bit of the type tag
+#define TAG(p) *GET_TYPE_ADR(p)=(int32_t *)(((uint64_t) (GET_TYPE(p))) | 1)
+#define TAGGED(p) (((uint64_t) (GET_TYPE(p))) & 0x0000000f) == 1
 
 int32_t *alloc_type_desc(int32_t size, int32_t num_p) {
   // reserve space for n pointer offsets
