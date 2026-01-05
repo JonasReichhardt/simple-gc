@@ -13,7 +13,7 @@
  */
 
 // how many free list blocks should be printed per line during dumping
-#define BLOCKS_PER_LINE 3
+#define BLOCKS_PER_LINE 5
 #define MAX_OBJECT_NAME_LEN 25
 
 typedef struct block {
@@ -43,11 +43,11 @@ object_t *get_obj_by_name(object_t *head, char *name) {
 object_t *get_obj_by_type(object_t *head, int32_t *type) {
   for (object_t *obj = head;; obj = obj->next) {
     // equal if they point to the same area
-    if (obj->type_desc - type == 0) {
+    if (obj->type_desc == type) {
       return obj;
     }
     if (obj->next == NULL) {
-      continue;
+      return NULL;
     }
   }
   return NULL;
@@ -92,26 +92,45 @@ void free_block_list(block_t *head) {
   free(head);
 }
 
+void block_list_print(block_t *head) {
+  if (head == NULL) {
+    return;
+  }
+  size_t i = 0;
+  printf("Block list:\n");
+  for (block_t *block = head;; block = block->next, i++) {
+    printf("[%lx]@[%p]->", block->size, block->mem);
+    if (i >= BLOCKS_PER_LINE) {
+      i = 0;
+      printf("\n");
+    }
+    if (block->next == head) {
+      printf("\n");
+      return;
+    }
+  }
+}
+
 /*
  * removes block if present in the list
  */
- void block_list_remove(block_t *head,block_t *block){
-     if (head == NULL || block == NULL) {
-       assert(false && "HEAP: Head or block is NULL pointer ;)");
-     }
-     // empty list
-     if(head->next==head){
-         return;
-     }
-     block_t *prev =head;
-     for(block_t *cur=head->next;block==head;block=block->next){
-         if(cur==block){
-             prev->next=block->next;
-             block->next =NULL;
-             return;
-         }
-     }
- }
+void block_list_remove(block_t *head, block_t *block) {
+  if (head == NULL || block == NULL) {
+    assert(false && "HEAP: Head or block is NULL pointer ;)");
+  }
+  // empty list
+  if (head->next == head) {
+    return;
+  }
+  block_t *prev = head;
+  for (block_t *cur = head->next; block == head; block = block->next) {
+    if (cur == block) {
+      prev->next = block->next;
+      block->next = NULL;
+      return;
+    }
+  }
+}
 
 /*
  * adds a block to the end of the linked list
@@ -159,14 +178,6 @@ block_t *block_list_add_new(block_t *head, void *mem, size_t size) {
   return block;
 }
 
-void print_type_desc(int32_t *desc) {
-  printf("TypeSize[%d]-", desc[0]);
-  printf("PointersOffsets");
-  for (int32_t i = desc[1]; i > 0; i++) {
-    printf("[%d]-", desc[i]);
-  }
-}
-
 void print_type_list(object_t *head) {
   printf("Registered types:\n");
   for (object_t *obj = head;; obj = obj->next) {
@@ -179,7 +190,7 @@ void print_type_list(object_t *head) {
   printf("\n");
 }
 
-size_t print_free_blocks(block_t *fblock) {
+size_t print_free_blocks_fancy(block_t *fblock) {
   printf("Free list:\n");
   size_t free_bytes = 0;
   size_t i = 0;
@@ -196,21 +207,36 @@ size_t print_free_blocks(block_t *fblock) {
   return free_bytes;
 }
 
-size_t print_used_blocks(block_t *ublock, object_t *objs) {
+size_t print_used_blocks_fancy(block_t *ublock, object_t *objs) {
   printf("Allocated \"Objects\"\n");
   size_t used_bytes = 0;
   size_t i = 0;
   for (block_t *block = ublock->next; block != ublock; block = block->next) {
-    uint64_t data = *((uint64_t *)(((size_t *)block->mem) + 1));
-    object_t *obj = get_obj_by_type(objs, *((int32_t **)block->mem));
+    uint64_t *obj_start = ((uint64_t *)(((size_t *)block->mem) + 1));
+    object_t *obj =
+        get_obj_by_type(objs, (int32_t *)MASK(*(size_t *)block->mem));
     if (obj == NULL) {
       assert(false && "Could not type indentifier during printing");
     }
-    printf("[%lub]@[%p] Name:[%s] Data:[0x%lx]\n", block->size, (void *)block,
-           obj->name, data);
+    printf("[%lub]@[%p] Name:[%s] Data:[0x%lx]\n", block->size,
+           (void *)obj_start, obj->name, *obj_start);
     used_bytes += block->size;
     i++;
   }
   printf("\n\nLive objects: %lu bytes\n", used_bytes);
   return used_bytes;
+}
+
+void print_marked_blocks(block_t *ublock, object_t *objects) {
+  printf("HEAP: Marked objects after gc mark:\n");
+  for (block_t *block = ublock->next; block != ublock; block = block->next) {
+    if (TAGGED_TYPE(*(size_t *)block->mem)) {
+      object_t *obj =
+          get_obj_by_type(objects, (int32_t *)MASK(*(size_t *)block->mem));
+      if (obj != NULL) {
+        printf("HEAP: Marked object %s @ %p\n", obj->name,
+               (void *)(((uint64_t *)block->mem) + 1));
+      }
+    }
+  }
 }

@@ -1,10 +1,12 @@
 
+#include "assert.h"
 #include "stdbool.h"
 #include "stdint.h"
 
 #include "heap.h"
 #include "objects.h"
 #include "type_desc.h"
+#include <stdint.h>
 
 #define NUM_ORDERS 3
 #define NUM_ORDER_NODES 7
@@ -23,17 +25,83 @@ void register_types() {
   register_type("ProductList", desc);
 }
 
-int main() {
-  /*
-   * PROLOGUE
-   */
+int test_small() {
   heap_init();
   register_types();
 
+  Order *order1 = (Order *)gc_alloc("Order");
+  Order *order2 = (Order *)gc_alloc("Order");
 
-  /*
-   * TEST
-   */
+  OrderNode *order_node1 = (OrderNode *)gc_alloc("OrderNode");
+  OrderNode *order_node2 = (OrderNode *)gc_alloc("OrderNode");
+
+  order1->id = 0xFEEDBEEF;
+  strncpy(order1->date, "05/01/2026", ORDER_DATE_LEN);
+  order1->completed = false;
+
+  order2->id = 0xBEEFFEED;
+  strncpy(order2->date, "05/01/2026", ORDER_DATE_LEN);
+  order2->completed = true;
+
+  order_node1->order = order1;
+  order_node1->next = order_node2;
+  order_node2->order = order2;
+  order_node2->next = NULL;
+
+  int32_t *order_type = GET_TYPE(order1);
+  int32_t *order_node_type = GET_TYPE(order_node1);
+
+  heap_dump();
+
+  heap_gc((void *)order_node1);
+
+  if (order_type != MASK(GET_TYPE(order1)) ||
+      order_node_type != MASK(GET_TYPE(order_node1))) {
+    printf("MAIN: Order desc before/after gc [%p]->[%p]\n", (void *)order_type,
+           MASK(GET_TYPE(order1)));
+    printf("MAIN: OrderNode desc before/after gc [%p]->[%p]\n",
+           (void *)order_node_type, MASK(GET_TYPE(order_node1)));
+  }
+
+  if (TAGGED(order1) && TAGGED(order2) && TAGGED(order_node1) &&
+      TAGGED(order_node2)) {
+    printf("MAIN: All objects tagged\n");
+  }
+
+  if (!order1->completed && order2->completed) {
+    printf("MAIN: Order1 [%lx] [%s] [%b]\n", order1->id, order1->date,
+           order1->completed);
+    printf("MAIN: Order2 [%lx] [%s] [%b]\n", order2->id, order2->date,
+           order2->completed);
+  }
+
+  if (order_node1->next == order_node2 && order_node2->next == NULL) {
+    printf("MAIN: OrderNode list intact:\n");
+    printf("MAIN: Order2 through list [%lx] [%s] [%b]\n",
+           order_node1->next->order->id, order_node1->next->order->date,
+           order_node1->next->order->completed);
+  }
+
+  heap_dump();
+  heap_print_marked_blocks();
+
+  // Remove reference and run gc again
+  // TODO implement mark removal by sweep
+  /*order_node1->next = NULL;
+  heap_gc((void *)order_node1);
+  heap_dump();
+  heap_print_marked_blocks();*/
+
+  heap_deinit();
+  return 0;
+}
+
+int test_big() {
+  // PROLOGUE
+  heap_init();
+  register_types();
+
+  // TEST
   Order *orders[NUM_ORDERS];
   for (uint i = 0; i < NUM_ORDERS; i++) {
     orders[i] = (Order *)gc_alloc("Order");
@@ -112,14 +180,15 @@ int main() {
     assert(false && "Could not allocate ProductList");
   }
   product_list->first = pnode0;
-  printf("%p ",(void*)pnode0);
-  /*
-   * EPILOGUE
-   */
-  //heap_dump();
-  gc((void*)product_list);
-  //heap_dump();
+  printf("product node addr [%p]\n", (void *)pnode0);
+
+  // EPILOGUE
+  heap_gc((void *)product_list);
+  heap_dump();
+  heap_print_marked_blocks();
 
   heap_deinit();
   return 0;
 }
+
+int main() { return test_small(); }

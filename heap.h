@@ -11,10 +11,9 @@
 #include "objects.h"
 #include "type_desc.h"
 #include <stddef.h>
-#include <stdint.h>
 
 #define HEAP_SIZEB 32768 // 32KiB
-#define DEBUG false
+#define DEBUG true
 
 // Heap related variables
 static void *hstart;    // heap start
@@ -58,22 +57,49 @@ void mark(void *roots) {
   if (roots == NULL || TAGGED(roots)) {
     assert(false && "Cannot perform GC on NULL or tagged object");
   }
-  // TAG(roots);
-  void *prev, *cur, *p = NULL;
-  cur = roots;
-  int32_t *cur_t = GET_TYPE(roots)++; // skip first element of type descriptor
+  void *p = NULL;
+  void *prev = NULL;
+  void *cur = roots;
+  TAG(roots);
+  uint32_t i = 0;
   for (;;) {
-    cur_t += 1;
-    int32_t off = *cur_t;
-    if (off >= 0) {
-      p = (void *)(*(((size_t *)cur) + off)); // set p to child
+    *(uint32_t **)MASK(GET_TYPE_ADR(cur)) += 1; // move type desc pointer foward
+    int32_t off = *(int32_t *)MASK(GET_TYPE(cur));
+    // printf("Iteration [%d] : prev[%p] cur[%p] p[%p] next pointer in
+    // obj[%d]\n",
+    //        i, prev, cur, p, off);
+    if (off >= 0) { // advance
+      size_t childaddr = ((size_t)cur) + off;
+      p = *((void **)(childaddr)); // set p to child
       if (p != NULL && !(TAGGED(p))) {
-          (void*)(*(((size_t *)cur) + off)) = prev;
-
+        // printf("Advance before rotation : prev[%p] cur[%p] p[%p]\n", prev,
+        // cur,
+        //       p);
+        *(size_t *)(childaddr) = (size_t)prev;
+        prev = cur;
+        cur = p;
+        TAG(cur);
+        // printf("Advance after rotation: prev[%p] cur[%p] p[%p]\n", prev, cur,
+        //        p);
       }
-      return;
-    } else {
+    } else { // retreat
+      // printf("Retreat before rotation : prev[%p] cur[%p] p[%p]\n", prev, cur,
+      //       p);
+      *(uint32_t **)MASK(GET_TYPE_ADR(cur)) +=
+          off; // move type desc pointer back
+      if (prev == NULL) {
+        return;
+      }
+      p = cur;
+      cur = prev;
+      off = *(uint32_t *)MASK(GET_TYPE(cur));
+      size_t childaddr = ((size_t)cur) + off;
+      prev = (void *)*((void **)(childaddr));
+      *((void **)(childaddr)) = p;
+      // printf("Retreat after rotation : prev[%p] cur[%p] p[%p]\n", prev, cur,
+      // p);
     }
+    i++;
   }
 }
 
@@ -134,6 +160,10 @@ void register_type(char *name, int32_t *desc_addr) {
   new_obj->type_desc = desc_addr;
   new_obj->next = objects;
   objects = new_obj;
+#if DEBUG
+  printf("HEAP: new type %s with type descriptor: ", new_obj->name);
+  print_type_desc(new_obj->type_desc);
+#endif
 }
 
 void *gc_alloc(char *name) {
@@ -147,8 +177,8 @@ void *gc_alloc(char *name) {
   // allocate "Object" on our heap with size for the hidden type tag
   uint32_t alloc_size = obj_type->type_desc[0] + sizeof(size_t);
 #if DEBUG
-  printf("HEAP: Allocation request for [%s] with size [%u]+[%lu]\n",
-         obj_type->name, obj_type->type_desc[0], sizeof(size_t));
+  // printf("HEAP: Allocation request for [%s] with size [%u]+[%lu]\n",
+  //      obj_type->name, obj_type->type_desc[0], sizeof(size_t));
 #endif
   void *object = heap_alloc(alloc_size);
 
@@ -167,7 +197,7 @@ void *gc_alloc(char *name) {
 }
 
 // Run Mark&Sweep algorithm, free unused blocks and compact heap
-void gc(void *roots) {
+void heap_gc(void *roots) {
   mark(roots);
   // sweep();
 }
@@ -223,11 +253,15 @@ void heap_dump() {
   printf("------------------------------------------\n");
   printf("   HEAP DUMP       %p .... %p\n", hstart, hend);
   printf("------------------------------------------\n");
-  size_t free_bytes = print_free_blocks(fblock);
+  size_t free_bytes = print_free_blocks_fancy(fblock);
   printf("------------------------------------------\n");
-  size_t used_bytes = print_used_blocks(ublock, objects);
+  size_t used_bytes = print_used_blocks_fancy(ublock, objects);
   printf("------------------------------------------\n");
   printf("[Live Objects] %lu bytes [Free Blocks] %lu bytes [Combined] %lu "
          "bytes [Heap size] %d\n",
          used_bytes, free_bytes, used_bytes + free_bytes, HEAP_SIZEB);
 }
+
+void heap_print_used_blocks() { block_list_print(ublock); }
+
+void heap_print_marked_blocks() { print_marked_blocks(ublock, objects); }
