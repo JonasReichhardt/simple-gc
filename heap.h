@@ -10,7 +10,6 @@
 #include "heap_util.h"
 #include "objects.h"
 #include "type_desc.h"
-#include <stddef.h>
 
 #define HEAP_SIZEB 32768 // 32KiB
 #define DEBUG true
@@ -42,16 +41,23 @@ static void sweep() {
     return;
   }
 
-  for (block_t *block = ublock->next;; block = block->next) {
+  for (block_t *block = ublock->next;;) {
     if (block == ublock) {
       return;
     }
     size_t tag_addr = *(size_t *)block->mem;
     if (TAGGED_TYPE(tag_addr)) {
       *(size_t *)block->mem = (size_t)MASK(tag_addr); // remove mark
+      block = block->next;
     } else {
+      // as block is move to free list we need to preserve the old next
+      block_t *temp = block->next;
       block_list_remove(ublock, block);
       block_list_add_sorted(fblock, block);
+      printf("HEAP: freed object @ [0x%lx]\n", ((uint64_t)block->mem) + 1);
+      block = temp;
+      block_list_merge(fblock); // try merging after every free -> worse perf
+                                // but cleaner free list
     }
   }
 }

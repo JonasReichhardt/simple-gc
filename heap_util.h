@@ -181,21 +181,22 @@ void block_list_add_sorted(block_t *head, block_t *block) {
   if (head == NULL || block == NULL) {
     assert(false && "HEAP: Head or block is NULL pointer)");
   }
+  block_t *prev = head;
   // empty list
   if (head->next == head) {
-    block_list_add_back(head, block);
+    block_list_add_front(head, block);
     return;
   }
-  for (block_t *cur = head->next;; cur = cur->next) {
+  for (block_t *cur = head->next;; prev = cur, cur = cur->next) {
     if (cur == head) {
       // no block to merge found
       // block is added to the front to be reallocated first
       block_list_add_back(head, block);
       return;
     }
-    if ((size_t)block->mem < (size_t)cur->mem) {
-      block->next = cur->next;
-      cur->next = block;
+    if (block->mem < cur->mem) {
+      prev->next = block;
+      block->next = cur;
       return;
     }
   }
@@ -203,19 +204,17 @@ void block_list_add_sorted(block_t *head, block_t *block) {
 
 /* merges memory-adjacent blocks in the given list */
 void block_list_merge(block_t *head) {
-  /*for(block_t *cur=head->next;cur!=head;cur=cur->next){
-      printf("cur [%p]-[%p]\n",(uint8_t*)cur->mem,(uint8_t*)cur->mem+cur->size);
-      printf("block
-  [%p]-[%p]\n",(uint8_t*)block->mem,(uint8_t*)block->mem+block->size); block_t
-  *dealloc_b = NULL; block_t *resize_b = NULL;
-      if((uint8_t*)cur->mem+cur->size==(uint8_t*)block->mem){
-          resize_b = cur;
-          dealloc_b = block;
-      }else if((uint8_t*)block->mem+block->size==(uint8_t*)cur->mem){
-          resize_b = cur;
-          dealloc_b = block;
-      }
-  }*/
+  for (block_t *cur = head->next; cur != head; cur = cur->next) {
+    if (cur->next == head) {
+      return;
+    }
+    if ((uint8_t *)cur->mem + cur->size == (uint8_t *)cur->next->mem) {
+      block_t *temp = cur->next;
+      cur->size += cur->next->size;
+      cur->next = cur->next->next;
+      free(temp);
+    }
+  }
 }
 
 /* instantiate a new block with given values */
@@ -234,7 +233,7 @@ size_t print_free_blocks_fancy(block_t *fblock) {
   size_t free_bytes = 0;
   size_t i = 0;
   for (block_t *block = fblock->next; block != fblock; block = block->next) {
-    printf("[%lu]@[%p]<--", block->size, (void *)block);
+    printf("[%lu]@[%p]->", block->size, (void *)block);
     free_bytes += block->size;
     i++;
     if (i == BLOCKS_PER_LINE) {

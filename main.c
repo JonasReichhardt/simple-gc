@@ -190,9 +190,11 @@ int test_big() {
     assert(false && "Could not allocate ProductList");
   }
   product_list->first = pnode0;
-  printf("product node addr [%p]\n", (void *)pnode0);
+
+  heap_dump();
 
   // EPILOGUE
+  product_list->first = NULL;
   heap_gc((void *)product_list);
   heap_dump();
 
