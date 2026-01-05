@@ -9,24 +9,30 @@
 #include "type_desc.h"
 
 /*
- * This file contains some function utility for the heap
+ * This file contains utility structs and functions for the heap
  */
 
 // how many free list blocks should be printed per line during dumping
 #define BLOCKS_PER_LINE 5
 #define MAX_OBJECT_NAME_LEN 25
 
+/* General purpose struct used for used blocks and free list */
 typedef struct block {
   size_t size;
   void *mem;
   struct block *next;
 } block_t;
 
+/* Object that can be instantiated by the Heap */
 typedef struct object {
   char name[MAX_OBJECT_NAME_LEN];
   int32_t *type_desc;
   struct object *next;
 } object_t;
+
+/*
+ * OBJECT FUNCTIONS
+ */
 
 object_t *get_obj_by_name(object_t *head, char *name) {
   for (object_t *obj = head;; obj = obj->next) {
@@ -66,9 +72,23 @@ void free_object_list(object_t *head) {
   }
 }
 
+void print_type_list(object_t *head) {
+  printf("Registered types:\n");
+  for (object_t *obj = head;; obj = obj->next) {
+    printf("Name[%s]-", obj->name);
+    print_type_desc(obj->type_desc);
+    if (obj->next == NULL) {
+      continue;
+    }
+  }
+  printf("\n");
+}
+
 /*
- * frees all blocks of the linked list
+ * BLOCK LIST FUNCTIONS
  */
+
+/* frees all blocks of the linked list */
 void free_block_list(block_t *head) {
   if (head == NULL) {
     return;
@@ -92,6 +112,7 @@ void free_block_list(block_t *head) {
   free(head);
 }
 
+/* Print a raw representation of the given block list */
 void block_list_print(block_t *head) {
   if (head == NULL) {
     return;
@@ -99,7 +120,8 @@ void block_list_print(block_t *head) {
   size_t i = 0;
   printf("Block list:\n");
   for (block_t *block = head;; block = block->next, i++) {
-    printf("[%lx]@[%p]->", block->size, block->mem);
+    printf("[%p]-[%lx]-[%p]->", block->mem, block->size,
+           (int8_t *)block->mem + block->size);
     if (i >= BLOCKS_PER_LINE) {
       i = 0;
       printf("\n");
@@ -111,9 +133,7 @@ void block_list_print(block_t *head) {
   }
 }
 
-/*
- * removes block if present in the list
- */
+/* removes block if present in the list */
 void block_list_remove(block_t *head, block_t *block) {
   if (head == NULL || block == NULL) {
     assert(false && "HEAP: Head or block is NULL pointer ;)");
@@ -123,7 +143,7 @@ void block_list_remove(block_t *head, block_t *block) {
     return;
   }
   block_t *prev = head;
-  for (block_t *cur = head->next; block == head; block = block->next) {
+  for (block_t *cur = head->next; cur != head; block = block->next) {
     if (cur == block) {
       prev->next = block->next;
       block->next = NULL;
@@ -132,9 +152,7 @@ void block_list_remove(block_t *head, block_t *block) {
   }
 }
 
-/*
- * adds a block to the end of the linked list
- */
+/* adds a block to the end of the linked list */
 void block_list_add_back(block_t *head, block_t *block) {
   if (head == NULL || block == NULL) {
     assert(false && "HEAP: Head or block is NULL pointer ;)");
@@ -148,9 +166,7 @@ void block_list_add_back(block_t *head, block_t *block) {
   }
 }
 
-/*
- * adds a block to the front of the linked list
- */
+/* adds a block to the front of the linked list */
 void block_list_add_front(block_t *head, block_t *block) {
   if (head == NULL || block == NULL) {
     assert(false && "HEAP: Head or block is NULL pointer)");
@@ -160,34 +176,57 @@ void block_list_add_front(block_t *head, block_t *block) {
   block->next = temp;
 }
 
-/*
- * creates a new block and adds it to the end of the list
- * also returns a reference to the new block
- */
-block_t *block_list_add_new(block_t *head, void *mem, size_t size) {
-  if (head == NULL) {
-    assert(false && "HEAP: Head is NULL pointer ;)");
+/* adds a block to the list sorted by referenced memory address */
+void block_list_add_sorted(block_t *head, block_t *block) {
+  if (head == NULL || block == NULL) {
+    assert(false && "HEAP: Head or block is NULL pointer)");
   }
+  // empty list
+  if (head->next == head) {
+    block_list_add_back(head, block);
+    return;
+  }
+  for (block_t *cur = head->next;; cur = cur->next) {
+    if (cur == head) {
+      // no block to merge found
+      // block is added to the front to be reallocated first
+      block_list_add_back(head, block);
+      return;
+    }
+    if ((size_t)block->mem < (size_t)cur->mem) {
+      block->next = cur->next;
+      cur->next = block;
+      return;
+    }
+  }
+}
+
+/* merges memory-adjacent blocks in the given list */
+void block_list_merge(block_t *head) {
+  /*for(block_t *cur=head->next;cur!=head;cur=cur->next){
+      printf("cur [%p]-[%p]\n",(uint8_t*)cur->mem,(uint8_t*)cur->mem+cur->size);
+      printf("block
+  [%p]-[%p]\n",(uint8_t*)block->mem,(uint8_t*)block->mem+block->size); block_t
+  *dealloc_b = NULL; block_t *resize_b = NULL;
+      if((uint8_t*)cur->mem+cur->size==(uint8_t*)block->mem){
+          resize_b = cur;
+          dealloc_b = block;
+      }else if((uint8_t*)block->mem+block->size==(uint8_t*)cur->mem){
+          resize_b = cur;
+          dealloc_b = block;
+      }
+  }*/
+}
+
+/* instantiate a new block with given values */
+block_t *block_list_new(void *mem, size_t size) {
   block_t *block = (block_t *)malloc(sizeof(block_t));
   if (block == NULL) {
     assert(false && "HEAP: Could not allocate block for list");
   }
   block->size = size;
   block->mem = mem;
-  block_list_add_back(head, block);
   return block;
-}
-
-void print_type_list(object_t *head) {
-  printf("Registered types:\n");
-  for (object_t *obj = head;; obj = obj->next) {
-    printf("Name[%s]-", obj->name);
-    print_type_desc(obj->type_desc);
-    if (obj->next == NULL) {
-      continue;
-    }
-  }
-  printf("\n");
 }
 
 size_t print_free_blocks_fancy(block_t *fblock) {

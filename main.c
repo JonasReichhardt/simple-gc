@@ -25,15 +25,30 @@ void register_types() {
   register_type("ProductList", desc);
 }
 
+int test_mini() {
+  heap_init();
+  register_types();
+
+  Order *order = heap_alloc("Order");
+  heap_dump();
+  order = NULL;
+  heap_gc((void *)order);
+
+  heap_dump();
+
+  heap_deinit();
+  return 0;
+}
+
 int test_small() {
   heap_init();
   register_types();
 
-  Order *order1 = (Order *)gc_alloc("Order");
-  Order *order2 = (Order *)gc_alloc("Order");
+  Order *order1 = (Order *)heap_alloc("Order");
+  Order *order2 = (Order *)heap_alloc("Order");
 
-  OrderNode *order_node1 = (OrderNode *)gc_alloc("OrderNode");
-  OrderNode *order_node2 = (OrderNode *)gc_alloc("OrderNode");
+  OrderNode *order_node1 = (OrderNode *)heap_alloc("OrderNode");
+  OrderNode *order_node2 = (OrderNode *)heap_alloc("OrderNode");
 
   order1->id = 0xFEEDBEEF;
   strncpy(order1->date, "05/01/2026", ORDER_DATE_LEN);
@@ -82,15 +97,10 @@ int test_small() {
            order_node1->next->order->completed);
   }
 
-  heap_dump();
-  heap_print_marked_blocks();
-
   // Remove reference and run gc again
-  // TODO implement mark removal by sweep
-  /*order_node1->next = NULL;
+  order_node2->order = NULL;
   heap_gc((void *)order_node1);
   heap_dump();
-  heap_print_marked_blocks();*/
 
   heap_deinit();
   return 0;
@@ -104,7 +114,7 @@ int test_big() {
   // TEST
   Order *orders[NUM_ORDERS];
   for (uint i = 0; i < NUM_ORDERS; i++) {
-    orders[i] = (Order *)gc_alloc("Order");
+    orders[i] = (Order *)heap_alloc("Order");
     if (orders[i] == NULL) {
       assert(false && "Could not allocate Order");
     }
@@ -117,7 +127,7 @@ int test_big() {
 
   OrderNode *order_nodes[NUM_ORDER_NODES];
   for (uint i = 0; i < NUM_ORDER_NODES; i++) {
-    order_nodes[i] = (OrderNode *)gc_alloc("OrderNode");
+    order_nodes[i] = (OrderNode *)heap_alloc("OrderNode");
     if (order_nodes[i] == NULL) {
       assert(false && "Could not allocate OrderNode");
     }
@@ -140,9 +150,9 @@ int test_big() {
   order_nodes[6]->next = NULL;
   order_nodes[6]->order = orders[2];
 
-  Product *prod0 = (Product *)gc_alloc("Product");
-  Product *prod1 = (Product *)gc_alloc("Product");
-  Product *prod2 = (Product *)gc_alloc("Product");
+  Product *prod0 = (Product *)heap_alloc("Product");
+  Product *prod1 = (Product *)heap_alloc("Product");
+  Product *prod2 = (Product *)heap_alloc("Product");
 
   if (prod0 == NULL || prod1 == NULL || prod2 == NULL) {
     assert(false && "Could not allocate Product");
@@ -160,9 +170,9 @@ int test_big() {
   strncpy(prod2->name, "Socks", PRODUCT_NAME_LEN);
   prod2->order = order_nodes[5];
 
-  ProdNode *pnode0 = (ProdNode *)gc_alloc("ProductNode");
-  ProdNode *pnode1 = (ProdNode *)gc_alloc("ProductNode");
-  ProdNode *pnode2 = (ProdNode *)gc_alloc("ProductNode");
+  ProdNode *pnode0 = (ProdNode *)heap_alloc("ProductNode");
+  ProdNode *pnode1 = (ProdNode *)heap_alloc("ProductNode");
+  ProdNode *pnode2 = (ProdNode *)heap_alloc("ProductNode");
 
   if (pnode0 == NULL || pnode1 == NULL || pnode2 == NULL) {
     assert(false && "Could not allocate ProductNode");
@@ -175,7 +185,7 @@ int test_big() {
   pnode2->product = prod2;
   pnode2->next = NULL;
 
-  ProductList *product_list = (ProductList *)gc_alloc("ProductList");
+  ProductList *product_list = (ProductList *)heap_alloc("ProductList");
   if (product_list == NULL) {
     assert(false && "Could not allocate ProductList");
   }
@@ -185,10 +195,9 @@ int test_big() {
   // EPILOGUE
   heap_gc((void *)product_list);
   heap_dump();
-  heap_print_marked_blocks();
 
   heap_deinit();
   return 0;
 }
 
-int main() { return test_small(); }
+int main() { return test_mini(); }
