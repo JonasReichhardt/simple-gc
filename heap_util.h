@@ -133,6 +133,30 @@ void block_list_print(block_t *head) {
   }
 }
 
+/* prints the first 64bit value of the block */
+/* when given a used list it prints all type desc pointers */
+void block_list_print_values(block_t *head) {
+  if (head == NULL) {
+    return;
+  }
+  size_t i = 0;
+  printf("Type descriptors:\n");
+  for (block_t *block = head;; block = block->next, i++) {
+    if (block->mem == NULL) {
+      continue;
+    }
+    printf("[%lx]->", *(uint64_t *)block->mem);
+    if (i >= BLOCKS_PER_LINE) {
+      i = 0;
+      printf("\n");
+    }
+    if (block->next == head) {
+      printf("\n");
+      return;
+    }
+  }
+}
+
 /* removes block if present in the list */
 void block_list_remove(block_t *head, block_t *block) {
   if (head == NULL || block == NULL) {
@@ -143,7 +167,7 @@ void block_list_remove(block_t *head, block_t *block) {
     return;
   }
   block_t *prev = head;
-  for (block_t *cur = head->next; cur != head; block = block->next) {
+  for (block_t *cur = head->next; cur != head; cur = cur->next) {
     if (cur == block) {
       prev->next = block->next;
       block->next = NULL;
@@ -209,6 +233,9 @@ void block_list_merge(block_t *head) {
       return;
     }
     if ((uint8_t *)cur->mem + cur->size == (uint8_t *)cur->next->mem) {
+      printf("HEAP: merged free blocks with size [%lu]+[%lu] to new block "
+             "[%lu] @ [%p]\n",
+             cur->size, cur->next->size, cur->size + cur->next->size, cur->mem);
       block_t *temp = cur->next;
       cur->size += cur->next->size;
       cur->next = cur->next->next;
@@ -251,10 +278,12 @@ size_t print_used_blocks_fancy(block_t *ublock, object_t *objs) {
   size_t i = 0;
   for (block_t *block = ublock->next; block != ublock; block = block->next) {
     uint64_t *obj_start = ((uint64_t *)(((size_t *)block->mem) + 1));
-    object_t *obj =
-        get_obj_by_type(objs, (int32_t *)MASK(*(size_t *)block->mem));
+    int32_t *type_desc = (int32_t *)MASK(*(size_t *)block->mem);
+    object_t *obj = get_obj_by_type(objs, type_desc);
     if (obj == NULL) {
-      assert(false && "Could not type indentifier during printing");
+      printf("HEAP: Cannot find obj with type desc @ [%p]\n",
+             MASK(*(size_t *)block->mem));
+      return used_bytes;
     }
     printf("[%lub]@[%p] Name:[%s] Data:[0x%lx]\n", block->size,
            (void *)obj_start, obj->name, *obj_start);

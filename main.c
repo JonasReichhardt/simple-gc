@@ -97,7 +97,7 @@ int test_small() {
            order_node1->next->order->completed);
   }
 
-  // Remove reference and run gc again
+  // Remove reference to order2 and run gc again
   order_node2->order = NULL;
   heap_gc((void *)order_node1);
   heap_dump();
@@ -202,4 +202,4 @@ int test_big() {
   return 0;
 }
 
-int main() { return test_mini(); }
+int main() { return test_big(); }

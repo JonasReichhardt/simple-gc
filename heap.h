@@ -208,14 +208,14 @@ void *heap_alloc(char *name) {
 
 /* Run garbage collection and compact heap */
 void heap_gc(void *roots) {
-  printf("------------------------------------------\n");
-  printf("          HEAP GARBAGE COLLECTION         \n");
-  printf("------------------------------------------\n");
+  printf("-------------------------------------------\n");
+  printf("          HEAP GARBAGE COLLECTION          \n");
+  printf("-------------------------------------------\n");
   mark(roots);
   print_marked_blocks(ublock, objects);
-  printf("------------------------------------------\n");
+  printf("-------------------------------------------\n");
   sweep();
-  printf("------------------------------------------\n");
+  printf("-----HEAP GARBAGE COLLECTION FINISHED------\n");
 }
 
 /* Allocate and initialize heap */
