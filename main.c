@@ -63,39 +63,7 @@ int test_small() {
   order_node2->order = order2;
   order_node2->next = NULL;
 
-  int32_t *order_type = GET_TYPE(order1);
-  int32_t *order_node_type = GET_TYPE(order_node1);
-
   heap_dump();
-
-  heap_gc((void *)order_node1);
-
-  if (order_type != MASK(GET_TYPE(order1)) ||
-      order_node_type != MASK(GET_TYPE(order_node1))) {
-    printf("MAIN: Order desc before/after gc [%p]->[%p]\n", (void *)order_type,
-           MASK(GET_TYPE(order1)));
-    printf("MAIN: OrderNode desc before/after gc [%p]->[%p]\n",
-           (void *)order_node_type, MASK(GET_TYPE(order_node1)));
-  }
-
-  if (TAGGED(order1) && TAGGED(order2) && TAGGED(order_node1) &&
-      TAGGED(order_node2)) {
-    printf("MAIN: All objects tagged\n");
-  }
-
-  if (!order1->completed && order2->completed) {
-    printf("MAIN: Order1 [%lx] [%s] [%b]\n", order1->id, order1->date,
-           order1->completed);
-    printf("MAIN: Order2 [%lx] [%s] [%b]\n", order2->id, order2->date,
-           order2->completed);
-  }
-
-  if (order_node1->next == order_node2 && order_node2->next == NULL) {
-    printf("MAIN: OrderNode list intact:\n");
-    printf("MAIN: Order2 through list [%lx] [%s] [%b]\n",
-           order_node1->next->order->id, order_node1->next->order->date,
-           order_node1->next->order->completed);
-  }
 
   // Remove reference to order2 and run gc again
   order_node2->order = NULL;

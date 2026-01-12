@@ -10,7 +10,7 @@ $(TARGET): $(TARGET).c $(DEPS)
 	$(CC) $(CFLAGS) -o $(BUILD_DIR)/$(TARGET) $(DEPS) $(TARGET).c
 
 release:
-	@echo "WARNING: Only use -O1 compiler optimization"
+	# [WARNING] Only use -01 as higher optimization levels interfere with DSW algorithm of GC
 	$(CC) $(CFLAGSR) -o $(BUILD_DIR)/$(TARGET) $(DEPS) $(TARGET).c
 
 check: $(TARGET)

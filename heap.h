@@ -18,7 +18,7 @@
 static void *hstart;    // heap start
 static void *hend;      // heap end
 static block_t *fblock; // dummy block: points to the first free block
-static block_t *ublock; // dummy block: points to the first free block
+static block_t *ublock; // dummy block: points to the first used block
 static bool is_init = false;
 
 // Object related variables
@@ -50,12 +50,11 @@ static void sweep() {
       *(size_t *)block->mem = (size_t)MASK(tag_addr); // remove mark
       block = block->next;
     } else {
-      // as block is move to free list we need to preserve the old next
-      block_t *temp = block->next;
-      block_list_remove(ublock, block);
-      block_list_add_sorted(fblock, block);
-      printf("HEAP: freed object @ [0x%lx]\n", ((uint64_t)block->mem) + 1);
-      block = temp;
+      block_t *prev_block =
+          block_list_remove(ublock, block); // remove from used list
+      block_list_add_sorted(fblock, block); // add to free list
+      printf("HEAP: freed object @ [0x%lx]\n", ((uint64_t)block->mem) + 8);
+      block = prev_block->next;
       block_list_merge(fblock); // try merging after every free -> worse perf
                                 // but cleaner free list
     }
@@ -149,6 +148,59 @@ static void *alloc(uint32_t alloc_size) {
   assert(false &&
          "HEAP: Something is wrong with the free list. There is no cyclic "
          "reference");
+}
+
+static size_t print_free_blocks_fancy(block_t *fblock) {
+  printf("Free list:\n");
+  size_t free_bytes = 0;
+  size_t i = 0;
+  for (block_t *block = fblock->next; block != fblock; block = block->next) {
+    printf("[%lu]@[%p]->", block->size, (void *)block);
+    free_bytes += block->size;
+    i++;
+    if (i == BLOCKS_PER_LINE) {
+      printf("\n");
+      i = 0;
+    }
+  }
+  printf("\n\nFree heap space: %lu bytes\n", free_bytes);
+  return free_bytes;
+}
+
+static size_t print_used_blocks_fancy(block_t *ublock, object_t *objs) {
+  printf("Allocated \"Objects\"\n");
+  size_t used_bytes = 0;
+  size_t i = 0;
+  for (block_t *block = ublock->next; block != ublock; block = block->next) {
+    uint64_t *obj_start = ((uint64_t *)(((size_t *)block->mem) + 1));
+    int32_t *type_desc = (int32_t *)MASK(*(size_t *)block->mem);
+    object_t *obj = get_obj_by_type(objs, type_desc);
+    if (obj == NULL) {
+      printf("HEAP: Cannot find obj with type desc @ [%p]\n",
+             MASK(*(size_t *)block->mem));
+      return used_bytes;
+    }
+    printf("[%lub]@[%p] Name:[%s] Data:[0x%lx]\n", block->size,
+           (void *)obj_start, obj->name, *obj_start);
+    used_bytes += block->size;
+    i++;
+  }
+  printf("\n\nLive objects: %lu bytes\n", used_bytes);
+  return used_bytes;
+}
+
+static void print_marked_blocks(block_t *ublock, object_t *objects) {
+  printf("HEAP: Marked objects after gc mark:\n");
+  for (block_t *block = ublock->next; block != ublock; block = block->next) {
+    if (TAGGED_TYPE(*(size_t *)block->mem)) {
+      object_t *obj =
+          get_obj_by_type(objects, (int32_t *)MASK(*(size_t *)block->mem));
+      if (obj != NULL) {
+        printf("HEAP: Marked object %s @ %p\n", obj->name,
+               (void *)(((uint64_t *)block->mem) + 1));
+      }
+    }
+  }
 }
 
 /*
@@ -257,13 +309,16 @@ void heap_init() {
 // Deallocate heap area and related memory
 void heap_deinit() {
   // free linked lists
-  free_object_list(objects);
-  free_block_list(ublock);
-  free_block_list(fblock);
+  object_list_free(objects);
+  block_list_free(ublock);
+  block_list_free(fblock);
   // free heap area
   free(hstart);
   is_init = false;
 }
+
+/* Prints a raw representation of the used block list */
+void heap_print_used_blocks() { block_list_print(ublock); }
 
 /* Prints free/used blocks and available space on the heap */
 void heap_dump() {
@@ -278,6 +333,3 @@ void heap_dump() {
          "bytes [Heap size] %d\n",
          used_bytes, free_bytes, used_bytes + free_bytes, HEAP_SIZEB);
 }
-
-/* Prints a raw representation of the used block list */
-void heap_print_used_blocks() { block_list_print(ublock); }
