@@ -14,6 +14,7 @@
 
 #define BLOCKS_PER_LINE 5
 #define MAX_OBJECT_NAME_LEN 25
+// #define VERBOSE
 
 /* General purpose struct used for used blocks and free list */
 typedef struct block {
@@ -237,9 +238,11 @@ void block_list_merge(block_t *head) {
       return;
     }
     if ((uint8_t *)cur->mem + cur->size == (uint8_t *)cur->next->mem) {
+#ifdef VERBOSE
       printf("HEAP: merged free blocks with size [%lu]+[%lu] to new block "
              "[%lu] @ [%p]\n",
              cur->size, cur->next->size, cur->size + cur->next->size, cur->mem);
+#endif
       block_t *temp = cur->next;
       cur->size += cur->next->size;
       cur->next = cur->next->next;

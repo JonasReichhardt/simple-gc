@@ -5,8 +5,6 @@
 
 #include "heap.h"
 #include "objects.h"
-#include "type_desc.h"
-#include <stdint.h>
 
 #define NUM_ORDERS 3
 #define NUM_ORDER_NODES 7
@@ -79,7 +77,7 @@ int test_big() {
   heap_init();
   register_types();
 
-  // TEST
+  // SETUP
   Order *orders[NUM_ORDERS];
   for (uint i = 0; i < NUM_ORDERS; i++) {
     orders[i] = (Order *)heap_alloc("Order");
@@ -161,11 +159,20 @@ int test_big() {
 
   heap_dump();
 
-  // EPILOGUE
+  // TEST
   product_list->first = NULL;
   heap_gc((void *)product_list);
   heap_dump();
 
+  pnode0 = (ProdNode *)heap_alloc("ProductNode");
+  pnode0->product = NULL;
+  pnode0->next = NULL;
+  product_list->first = pnode0;
+
+  heap_gc((void *)product_list);
+  heap_dump();
+
+  // EPILOGUE
   heap_deinit();
   return 0;
 }

@@ -12,7 +12,7 @@
 #include "type_desc.h"
 
 #define HEAP_SIZEB 32768 // 32KiB
-#define DEBUG true
+// #define VERBOSE
 
 // Heap related variables
 static void *hstart;    // heap start
@@ -53,7 +53,9 @@ static void sweep() {
       block_t *prev_block =
           block_list_remove(ublock, block); // remove from used list
       block_list_add_sorted(fblock, block); // add to free list
+#ifdef VERBOSE
       printf("HEAP: freed object @ [0x%lx]\n", ((uint64_t)block->mem) + 8);
+#endif
       block = prev_block->next;
       block_list_merge(fblock); // try merging after every free -> worse perf
                                 // but cleaner free list
@@ -104,10 +106,8 @@ void mark(void *roots) {
 static void in_heap(block_t *block) {
   void *end = (void *)(((uint8_t *)block->mem) + block->size);
   if (block->mem < hstart || block->mem > hend || end < hstart || end > hend) {
-    heap_dump();
     printf("HEAP: alloc block [%p] outside [%p...%p]\n", (void *)block, hstart,
            hend);
-    printf("HEAP: generated heap trace for error search\n");
     assert(false);
   }
 }
@@ -189,6 +189,7 @@ static size_t print_used_blocks_fancy(block_t *ublock, object_t *objs) {
   return used_bytes;
 }
 
+#ifdef VERBOSE
 static void print_marked_blocks(block_t *ublock, object_t *objects) {
   printf("HEAP: Marked objects after gc mark:\n");
   for (block_t *block = ublock->next; block != ublock; block = block->next) {
@@ -202,6 +203,7 @@ static void print_marked_blocks(block_t *ublock, object_t *objects) {
     }
   }
 }
+#endif
 
 /*
  * PUBLIC METHODS
@@ -217,7 +219,7 @@ void register_type(char *name, int32_t *desc_addr) {
   new_obj->type_desc = desc_addr;
   new_obj->next = objects;
   objects = new_obj;
-#if DEBUG
+#ifdef VERBOSE
   printf("HEAP: new type %s with type descriptor: ", new_obj->name);
   print_type_desc(new_obj->type_desc);
 #endif
@@ -238,9 +240,9 @@ void *heap_alloc(char *name) {
 
   // allocate "Object" on our heap with size for the hidden type tag
   uint32_t alloc_size = obj_type->type_desc[0] + sizeof(size_t);
-#if DEBUG
-  // printf("HEAP: Allocation request for [%s] with size [%u]+[%lu]\n",
-  //      obj_type->name, obj_type->type_desc[0], sizeof(size_t));
+#ifdef VERBOSE
+  printf("HEAP: Allocation request for [%s] with size [%u]+[%lu]\n",
+         obj_type->name, obj_type->type_desc[0], sizeof(size_t));
 #endif
   void *object = alloc(alloc_size);
 
@@ -264,8 +266,10 @@ void heap_gc(void *roots) {
   printf("          HEAP GARBAGE COLLECTION          \n");
   printf("-------------------------------------------\n");
   mark(roots);
+#ifdef VERBOSE
   print_marked_blocks(ublock, objects);
   printf("-------------------------------------------\n");
+#endif
   sweep();
   printf("-----HEAP GARBAGE COLLECTION FINISHED------\n");
 }
